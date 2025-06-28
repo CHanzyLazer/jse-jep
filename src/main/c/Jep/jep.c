@@ -84,7 +84,7 @@ JNIEXPORT jlong JNICALL Java_jep_Jep_init
 JNIEXPORT void JNICALL Java_jep_Jep_run
 (JNIEnv *env, jobject obj, jlong tstate, jstring str)
 {
-    const char *filename;
+    char *filename;
 
     filename = jstring2char(env, str);
     pyembed_run(env, (intptr_t) tstate, (char *) filename);
@@ -105,7 +105,7 @@ JNIEXPORT jobject JNICALL Java_jep_Jep_invoke
  jobjectArray args,
  jobject kwargs)
 {
-    const char *cname;
+    char *cname;
     jobject ret;
 
     cname = jstring2char(env, name);
@@ -124,7 +124,7 @@ JNIEXPORT jobject JNICALL Java_jep_Jep_invoke
 JNIEXPORT jint JNICALL Java_jep_Jep_compileString
 (JNIEnv *env, jobject obj, jlong tstate, jstring jstr)
 {
-    const char *str;
+    char *str;
     jint ret;
 
     str = jstring2char(env, jstr);
@@ -142,7 +142,7 @@ JNIEXPORT jint JNICALL Java_jep_Jep_compileString
 JNIEXPORT void JNICALL Java_jep_Jep_eval
 (JNIEnv *env, jobject obj, jlong tstate, jstring jstr)
 {
-    const char *str;
+    char *str;
 
     str = jstring2char(env, jstr);
     pyembed_eval(env, (intptr_t) tstate, (char *) str);
@@ -158,7 +158,7 @@ JNIEXPORT void JNICALL Java_jep_Jep_eval
 JNIEXPORT void JNICALL Java_jep_Jep_exec
 (JNIEnv *env, jobject obj, jlong tstate, jstring jstr)
 {
-    const char *str;
+    char *str;
 
     str = jstring2char(env, jstr);
     pyembed_exec(env, (intptr_t) tstate, (char *) str);
@@ -174,7 +174,7 @@ JNIEXPORT void JNICALL Java_jep_Jep_exec
 JNIEXPORT jobject JNICALL Java_jep_Jep_getValue
 (JNIEnv *env, jobject obj, jlong tstate, jstring jstr, jclass clazz)
 {
-    const char *str;
+    char *str;
     jobject ret;
 
     str = jstring2char(env, jstr);
@@ -204,7 +204,7 @@ JNIEXPORT void JNICALL Java_jep_Jep_close
 JNIEXPORT void JNICALL Java_jep_Jep_set__JLjava_lang_String_2Ljava_lang_Object_2
 (JNIEnv *env, jobject obj, jlong tstate, jstring jname, jobject jval)
 {
-    const char *name;
+    char *name;
 
     name = jstring2char(env, jname);
     pyembed_setparameter_object(env, (intptr_t) tstate, 0, name, jval);

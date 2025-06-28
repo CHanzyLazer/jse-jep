@@ -162,6 +162,15 @@ static PyObject* jnumber_As_PyObject(JNIEnv *env, jobject jobj, jclass class)
             return NULL;
         }
         return jfloat_As_PyObject(f);
+#ifdef AUTOCONVERT_BIGDECIMAL
+    } else if ((*env)->IsSameObject(env, class, JBIGDECIMAL_TYPE)) {
+        jdouble d = java_lang_Number_doubleValue(env, jobj);
+        if ((*env)->ExceptionCheck(env)) {
+            process_java_exception(env);
+            return NULL;
+        }
+        return jdouble_As_PyObject(d);
+#endif
     } else if ((*env)->IsSameObject(env, class, JBIGINTEGER_TYPE)) {
         PyObject* pystr = jobject_As_PyString(env, jobj);
         if (pystr == NULL) {

@@ -26,6 +26,7 @@
 */
 
 #include "Jep.h"
+#include "jniutil.h"
 
 #define JBYTE_MAX   127
 #define JBYTE_MIN  -128
@@ -421,10 +422,10 @@ static jobject pyfloat_as_jobject(JNIEnv *env, PyObject *pyobject,
  * jytpe corresponds to the NativeType and Type corresponds to <PrimitiveType>.
  */
 #define pyfastsequence_as_primitive_array(jtype, Type) \
-    jtype *buf = malloc(size*sizeof(jtype));\
+    jtype *buf = MALLOCN_TP(jtype, size);\
     jtype##Array jarray = (*env)->New##Type##Array(env, (jsize) size);\
     if (jarray == NULL) {\
-        free(buf);\
+        FREE(buf);\
         process_java_exception(env);\
         return (*env)->PopLocalFrame(env, NULL);\
     }\
@@ -432,12 +433,12 @@ static jobject pyfloat_as_jobject(JNIEnv *env, PyObject *pyobject,
         PyObject *item = PySequence_Fast_GET_ITEM(pyseq, i);\
         buf[i] = PyObject_As_##jtype(item);\
         if (PyErr_Occurred()){\
-            free(buf);\
+            FREE(buf);\
             return (*env)->PopLocalFrame(env, NULL);\
         }\
     }\
     (*env)->Set##Type##ArrayRegion(env, jarray,0, (jsize) size, buf);\
-    free(buf);\
+    FREE(buf);\
     if (process_java_exception(env)){\
         return (*env)->PopLocalFrame(env, NULL);\
     }\

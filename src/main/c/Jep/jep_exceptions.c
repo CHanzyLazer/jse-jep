@@ -26,6 +26,7 @@
 */
 
 #include "Jep.h"
+#include "jniutil.h"
 
 static PyObject* pyerrtype_from_throwable(JNIEnv*, jthrowable);
 
@@ -276,7 +277,7 @@ int process_py_exception(JNIEnv *env)
 
                         // remove the .py to look more like a Java StackTraceElement
                         namelen = (int) strlen(charPyFile);
-                        charPyFileNoExt = malloc(sizeof(char) * (namelen + 1));
+                        charPyFileNoExt = MALLOCN_TP(char, namelen + 1);
                         strcpy(charPyFileNoExt, charPyFile);
                         lastDot = strrchr(charPyFileNoExt, '.');
                         if (lastDot != NULL) {
@@ -284,7 +285,7 @@ int process_py_exception(JNIEnv *env)
                         }
 
                         // remove the dir path to look more like a Java StackTraceElement
-                        charPyFileNoDir = malloc(namelen + 1);
+                        charPyFileNoDir = MALLOCN_TP(char, namelen + 1);
                         lastBackslash = strrchr(charPyFile, FILE_SEP);
                         if (lastBackslash != NULL) {
                             strcpy(charPyFileNoDir, lastBackslash + 1);
@@ -311,16 +312,16 @@ int process_py_exception(JNIEnv *env)
                             PyErr_Format(PyExc_RuntimeError,
                                          "failed to create java.lang.StackTraceElement for python %s:%i.",
                                          charPyFile, pyLineNum);
-                            free(charPyFileNoDir);
-                            free(charPyFileNoExt);
+                            FREE(charPyFileNoDir);
+                            FREE(charPyFileNoExt);
                             Py_DECREF(pystack);
                             return 1;
                         }
                         (*env)->SetObjectArrayElement(env, stackArray, (jsize) i,
                                                       element);
                         count++;
-                        free(charPyFileNoDir);
-                        free(charPyFileNoExt);
+                        FREE(charPyFileNoDir);
+                        FREE(charPyFileNoExt);
                         (*env)->DeleteLocalRef(env, pyFileNoDir);
                         (*env)->DeleteLocalRef(env, pyFileNoExt);
                         (*env)->DeleteLocalRef(env, pyFunc);

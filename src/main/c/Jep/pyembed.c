@@ -42,6 +42,7 @@
 #endif
 
 #include "Jep.h"
+#include "jniutil.h"
 
 /*
  * fixes compiler warnings about PyMarshal_ReadLongFromFile and
@@ -432,7 +433,7 @@ void pyembed_startup(JNIEnv *env, jobjectArray sharedModulesArgv)
 
         count = (*env)->GetArrayLength(env, sharedModulesArgv);
         (*env)->PushLocalFrame(env, count * 2);
-        argv = (wchar_t**) malloc(count * sizeof(wchar_t*));
+        argv = MALLOCN_TP(wchar_t*, count);
         for (i = 0; i < count; i++) {
             char* arg     = NULL;
             wchar_t* argt = NULL;
@@ -443,13 +444,13 @@ void pyembed_startup(JNIEnv *env, jobjectArray sharedModulesArgv)
                 (*env)->PopLocalFrame(env, NULL);
                 THROW_JEP(env, "Received null argv.");
                 for (k = 0; k < i; k++) {
-                    free(argv[k]);
+                    FREE(argv[k]);
                 }
-                free(argv);
+                FREE(argv);
                 return;
             }
             arg = (char*) (*env)->GetStringUTFChars(env, jarg, NULL);
-            argt = malloc((strlen(arg) + 1) * sizeof(wchar_t));
+            argt = MALLOCN_TP(wchar_t, strlen(arg) + 1);
             mbstowcs(argt, arg, strlen(arg) + 1);
             (*env)->ReleaseStringUTFChars(env, jarg, arg);
             argv[i] = argt;
@@ -459,9 +460,9 @@ void pyembed_startup(JNIEnv *env, jobjectArray sharedModulesArgv)
 
         // free memory
         for (i = 0; i < count; i++) {
-            free(argv[i]);
+            FREE(argv[i]);
         }
-        free(argv);
+        FREE(argv);
         (*env)->PopLocalFrame(env, NULL);
     }
 
@@ -483,7 +484,7 @@ int pyembed_is_version_unsafe(void)
     int         i         = 0;
 
     pyversion = Py_GetVersion();
-    version = malloc(strlen(pyversion) + 1);
+    version = MALLOCN_TP(char, strlen(pyversion) + 1);
     strcpy(version, pyversion);
     major = version;
 
@@ -501,18 +502,18 @@ int pyembed_is_version_unsafe(void)
         char *msg;
         JNIEnv *env = pyembed_get_env();
 
-        msg = malloc(sizeof(char) * 200);
+        msg = MALLOCN_TP(char, 200);
         memset(msg, '\0', 200);
         sprintf(msg,
                 "Jep will not initialize because it was compiled against Python %i.%i but is running against Python %s.%s",
                 PY_MAJOR_VERSION, PY_MINOR_VERSION, major, minor);
         THROW_JEP(env, msg);
-        free(version);
-        free(msg);
+        FREE(version);
+        FREE(msg);
         return 1;
     }
 
-    free(version);
+    FREE(version);
     return 0;
 }
 
@@ -577,7 +578,7 @@ intptr_t pyembed_thread_init(JNIEnv *env, jobject cl, jobject caller,
      * the mainThreadState was created on a different thread. When python is
      * compiled with debug it checks the state and fails.
      */
-    jepThread = malloc(sizeof(JepThread));
+    jepThread = MALLOCN_TP(JepThread, 1);
     if (!jepThread) {
         THROW_JEP(env, "Out of memory.");
         return 0;
@@ -619,7 +620,7 @@ intptr_t pyembed_thread_init(JNIEnv *env, jobject cl, jobject caller,
         PyStatus status = Py_NewInterpreterFromConfig(&(jepThread->tstate), &config);
         if (PyStatus_Exception(status)) {
             THROW_JEP(env, status.err_msg);
-            free(jepThread);
+            FREE(jepThread);
             return 0;
         }
 #else
@@ -649,7 +650,7 @@ intptr_t pyembed_thread_init(JNIEnv *env, jobject cl, jobject caller,
         if (mod_main == NULL) {
             THROW_JEP(env, "Couldn't add module __main__.");
             PyEval_ReleaseThread(jepThread->tstate);
-            free(jepThread);
+            FREE(jepThread);
             return 0;
         }
         globals = PyModule_GetDict(mod_main);
@@ -719,7 +720,7 @@ void pyembed_thread_close(JNIEnv *env, intptr_t _jepThread)
         PyThreadState_Swap(mainThreadState);
         PyEval_ReleaseThread(mainThreadState);
     }
-    free(jepThread);
+    FREE(jepThread);
 }
 
 
@@ -1296,6 +1297,30 @@ EXIT:
     return ret;
 }
 
+
+
+#if defined(WIN32) || defined(_WIN64) || defined(_WIN32)
+inline FILE *pyfopen_r(const char * fileName) {
+    wchar_t* wfileName = Py_DecodeLocale(fileName, NULL);
+    FILE *file = _wfopen(wfileName, L"r");
+    PyMem_RawFree(wfileName);
+    return file;
+}
+inline FILE *pyfopen_rb(const char * fileName) {
+    wchar_t* wfileName = Py_DecodeLocale(fileName, NULL);
+    FILE *file = _wfopen(wfileName, L"rb");
+    PyMem_RawFree(wfileName);
+    return file;
+}
+#else
+inline FILE *pyfopen_r(const char * fileName) {
+    return fopen(fileName, "r");
+}
+inline FILE *pyfopen_rb(const char * fileName) {
+    return fopen(fileName, "rb");
+}
+#endif
+
 void pyembed_run(JNIEnv *env,
                  intptr_t _jepThread,
                  char *file)
@@ -1312,7 +1337,7 @@ void pyembed_run(JNIEnv *env,
     PyEval_AcquireThread(jepThread->tstate);
 
     if (file != NULL) {
-        FILE *script = fopen(file, "r");
+        FILE *script = pyfopen_r(file);
         if (!script) {
             THROW_JEP(env, "Couldn't open script file.");
             goto EXIT;
@@ -1323,7 +1348,7 @@ void pyembed_run(JNIEnv *env,
         if (maybe_pyc_file(script, file, ext, 0)) {
             /* Try to run a pyc file. First, re-open in binary */
             fclose(script);
-            if ((script = fopen(file, "rb")) == NULL) {
+            if ((script = pyfopen_rb(file)) == NULL) {
                 THROW_JEP(env, "pyembed_run: Can't reopen .pyc file");
                 goto EXIT;
             }

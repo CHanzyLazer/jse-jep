@@ -30,20 +30,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.StringTokenizer;
+import java.util.*;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.util.regex.Pattern;
 
 /**
  * A singleton that searches for loaded classes from the JRE and the Java
@@ -54,14 +46,23 @@ import java.util.jar.Manifest;
  * @author Mike Johnson
  */
 public class ClassList implements ClassEnquirer {
-
+    /// jse stuffs, 通过这些变量来直接注入 groovy 包，这样可以直接基于 ClassList 现有的读 jar 方法
+    /** 附加的 {@code java.class.path} */
+    public final static List<String> ADDITIONAL_CLASS_PATHS = new ArrayList<>();
+    /** 附加的遍历文件时，认为是类文件的后缀，默认只有 {@code .class} */
+    public final static List<String> ADDITIONAL_CLASS_FILE_EXTENSION = new ArrayList<>();
+    /** java 报名判断正则表达式 */
+    public final static Pattern PACKAGE_NAME = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
+    /// jse stuff end
+    
+    
     private static ClassList inst;
 
     // storage for package, member classes
-    private Map<String, List<String>> packageToClassMap = new HashMap<>();
+    private final Map<String, List<String>> packageToClassMap = new HashMap<>();
 
     // storage for package, sub-packages based on classes found
-    private Map<String, List<String>> packageToSubPackageMap = new HashMap<>();
+    private final Map<String, List<String>> packageToSubPackageMap = new HashMap<>();
 
     private ClassList() throws JepException {
         loadClassPath();
@@ -80,7 +81,7 @@ public class ClassList implements ClassEnquirer {
     private void loadClassPath() {
         StringTokenizer tok = new StringTokenizer(
                 System.getProperty("java.class.path"),
-                System.getProperty("path.separator"));
+                File.pathSeparator);
 
         Queue<String> queue = new LinkedList<>();
         Set<String> seen = new HashSet<>();
@@ -90,7 +91,14 @@ public class ClassList implements ClassEnquirer {
             queue.add(el);
             seen.add(el);
         }
-
+        
+        /// jse stuffs, add ADDITIONAL_CLASS_PATHS
+        for (String el : ADDITIONAL_CLASS_PATHS) {
+            queue.add(el);
+            seen.add(el);
+        }
+        /// jse stuff end
+        
         while (!queue.isEmpty()) {
             String el = queue.remove();
 
@@ -164,7 +172,7 @@ public class ClassList implements ClassEnquirer {
                 }
             } catch (IOException e) {
                 // debugging only
-                e.printStackTrace();
+                e.printStackTrace(System.err);
             }
         }
     }
@@ -186,26 +194,39 @@ public class ClassList implements ClassEnquirer {
         if (!folder.isDirectory()) {
             throw new IllegalArgumentException("folder is not a Directory");
         }
-        for (File file : folder.listFiles()) {
+        File[] files = folder.listFiles();
+        if (files != null) for (File file : files) {
             String entry = file.getName();
             if (file.isDirectory()) {
-                if (prefix != null && !prefix.isEmpty()) {
-                    /*
-                     * Include a . between directories only if there was a
-                     * prefix
-                     */
-                    addClassFilesInTree(file, prefix + "." + entry);
-                } else {
-                    /*
-                     * don't include a prefix - we only care about
-                     * subdirectories
-                     */
-                    addClassFilesInTree(file, entry);
+                // check invalid directory
+                if (PACKAGE_NAME.matcher(entry).matches()) {
+                    if (prefix != null && !prefix.isEmpty()) {
+                        /*
+                         * Include a . between directories only if there was a
+                         * prefix
+                         */
+                        addClassFilesInTree(file, prefix + "." + entry);
+                    } else {
+                        /*
+                         * don't include a prefix - we only care about
+                         * subdirectories
+                         */
+                        addClassFilesInTree(file, entry);
+                    }
                 }
-            } else if (file.exists() && file.canRead()
-                    && entry.toLowerCase().endsWith(".class")) {
-                // We've found a .class file on the file system. Add it.
-                addClass(prefix, entry.replaceAll(".class$", ""));
+            } else if (file.exists() && file.canRead()) {
+                if (entry.toLowerCase().endsWith(".class")) {
+                    // We've found a .class file on the file system. Add it.
+                    addClass(prefix, entry.substring(0, entry.length() - 6));
+                } else {
+                    /// jse stuffs, add ADDITIONAL_CLASS_FILE_EXTENSION
+                    for (String ext : ADDITIONAL_CLASS_FILE_EXTENSION) {
+                        if (entry.toLowerCase().endsWith(ext)) {
+                            addClass(prefix, entry.substring(0, entry.length() - ext.length()));
+                        }
+                    }
+                    /// jse stuff end
+                }
             }
         }
     }
@@ -232,8 +253,9 @@ public class ClassList implements ClassEnquirer {
             } catch (java.net.URISyntaxException e) {
                 throw new JepException(e);
             }
-
-            for (File classfile : dir.listFiles(new ClassFilenameFilter()))
+            
+            File[] classfiles = dir.listFiles(new ClassFilenameFilter());
+            if (classfiles != null) for (File classfile : classfiles)
                 addClass(p.getName(), stripClassExt(classfile.getName()));
         }
     }
@@ -248,6 +270,7 @@ public class ClassList implements ClassEnquirer {
      * The jre keeps a list of classes in the lib folder. We don't have a better
      * way to figure out what's in the java package, so this is my little hack.
      */
+    @SuppressWarnings({"ExtractMethodRecommender", "ConstantValue"})
     private void loadClassList() throws JepException {
         String version = System.getProperty("java.version");
 
@@ -297,7 +320,7 @@ public class ClassList implements ClassEnquirer {
 
             reader = new BufferedReader(new InputStreamReader(in));
 
-            String line = "";
+            String line;
             while ((line = reader.readLine()) != null) {
                 // ignore any class with $
                 if (line.indexOf('$') > -1)
@@ -305,7 +328,7 @@ public class ClassList implements ClassEnquirer {
 
                 // lines in the file look like: java/lang/String
                 // split on /
-                String[] parts = line.split("\\/");
+                String[] parts = line.split("/");
                 StringBuilder pname = new StringBuilder();
                 String cname = parts[parts.length - 1];
 
@@ -331,11 +354,7 @@ public class ClassList implements ClassEnquirer {
 
     // add a class with given package name
     private void addClass(String pname, String cname) {
-        List<String> el = packageToClassMap.get(pname);
-        if (el == null) {
-            el = new ArrayList<>();
-            packageToClassMap.put(pname, el);
-        }
+        List<String> el = packageToClassMap.computeIfAbsent(pname, k -> new ArrayList<>());
 
         // convert to style we need in C code
         String fqname = pname + "." + cname;
@@ -350,17 +369,13 @@ public class ClassList implements ClassEnquirer {
         while (dotIdx > -1) {
             String pkgStart = pname.substring(0, dotIdx);
             int nextDot = pname.indexOf(".", dotIdx + 1);
-            String subPkg = null;
+            String subPkg;
             if (nextDot > -1) {
                 subPkg = pname.substring(dotIdx + 1, nextDot);
             } else {
                 subPkg = pname.substring(dotIdx + 1);
             }
-            List<String> pl = packageToSubPackageMap.get(pkgStart);
-            if (pl == null) {
-                pl = new ArrayList<>();
-                packageToSubPackageMap.put(pkgStart, pl);
-            }
+            List<String> pl = packageToSubPackageMap.computeIfAbsent(pkgStart, k -> new ArrayList<>());
             if (!pl.contains(subPkg)) {
                 pl.add(subPkg);
             }
@@ -431,7 +446,7 @@ public class ClassList implements ClassEnquirer {
      * @throws Throwable
      *             if an error occurs
      */
-    public static void main(String argv[]) throws Throwable {
+    public static void main(String[] argv) throws Throwable {
         if (argv.length > 0) {
             for (String arg : argv) {
                 for (String c : ClassList.getInstance().getClassNames(arg))

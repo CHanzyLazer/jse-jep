@@ -38,7 +38,7 @@ JNIEXPORT jobject JNICALL Java_jep_python_PyObject_getAttr
 {
     JepThread  *jepThread;
     PyObject   *pyObject;
-    const char *attrName;
+    char       *attrName;
     PyObject   *attr;
     jobject     ret = NULL;
 
@@ -85,7 +85,7 @@ JNIEXPORT void JNICALL Java_jep_python_PyObject_setAttr
 {
     JepThread  *jepThread;
     PyObject   *pyObject;
-    const char *attrName;
+    char       *attrName;
     PyObject   *pyAttr;
     int         ret;
 
@@ -114,6 +114,7 @@ JNIEXPORT void JNICALL Java_jep_python_PyObject_setAttr
     }
 
 EXIT:
+    Py_XDECREF(pyAttr);
     PyEval_ReleaseThread(jepThread->tstate);
     release_utf_char(env, str, attrName);
 }
@@ -129,7 +130,7 @@ JNIEXPORT void JNICALL Java_jep_python_PyObject_delAttr
 {
     JepThread  *jepThread;
     PyObject   *pyObject;
-    const char *attrName;
+    char       *attrName;
     int         ret;
 
     jepThread = (JepThread *) tstate;
@@ -167,7 +168,7 @@ JNIEXPORT jboolean JNICALL Java_jep_python_PyObject_equals
     JepThread    *jepThread;
     PyObject     *pyObject;
     PyObject     *otherPyObject;
-    int result   = 0;
+    int           result;
     jboolean ret = JNI_FALSE;
 
     jepThread = (JepThread *) tstate;

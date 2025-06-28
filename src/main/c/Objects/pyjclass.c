@@ -63,7 +63,7 @@ static PyObject* pyjclass_add_inner_class(JNIEnv *env, PyJClassObject *topClz,
     if (public) {
         PyObject        *attrClz    = NULL;
         jstring          shortName  = NULL;
-        const char      *charName   = NULL;
+        char            *charName   = NULL;
 
         attrClz = PyJClass_Wrap(env, innerClz);
         if (!attrClz) {

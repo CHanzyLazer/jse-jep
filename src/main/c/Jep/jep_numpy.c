@@ -26,6 +26,7 @@
 */
 
 #include "Jep.h"
+#include "jniutil.h"
 
 /* this whole file is a no-op if numpy support is disabled */
 #if JEP_NUMPY_ENABLED
@@ -79,7 +80,7 @@ int npy_scalar_check(PyObject *obj)
         PyErr_Clear();
         return 0;
     }
-    return PyArray_IsScalar(obj, Number);
+    return PyArray_IsScalar(obj, Bool) || PyArray_IsScalar(obj, Number);
 }
 
 jobject convert_npy_scalar_jobject(JNIEnv* env, PyObject *pyobject,
@@ -88,6 +89,12 @@ jobject convert_npy_scalar_jobject(JNIEnv* env, PyObject *pyobject,
     jobject result = NULL;
     if (!init_numpy()) {
         return NULL;
+    } else if (PyArray_IsScalar(pyobject, Bool)) {
+        npy_bool b;
+        if ((*env)->IsAssignableFrom(env, JBOOL_OBJ_TYPE, expectedType)) {
+            PyArray_ScalarAsCtype(pyobject, &b);
+            result = java_lang_Boolean_new_Z(env, b ? JNI_TRUE : JNI_FALSE);
+        }
     } else if (!PyArray_IsScalar(pyobject, Number)) {
         return NULL;
     } else if (PyArray_IsScalar(pyobject, Float64)) {
@@ -370,18 +377,18 @@ static jobject convert_pyndarray_jndarray(JNIEnv *env, PyObject *pyobj)
     // setup the int[] constructor arg
     ndims = PyArray_NDIM(pyarray);
     dims = PyArray_DIMS(pyarray);
-    jdims = malloc(((int) ndims) * sizeof(jint));
+    jdims = MALLOCN_TP(jint, ndims);
     for (i = 0; i < ndims; i++) {
         jdims[i] = (jint) dims[i];
     }
     jdimObj = (*env)->NewIntArray(env, ndims);
     if (process_java_exception(env) || !jdimObj) {
-        free(jdims);
+        FREE(jdims);
         return NULL;
     }
 
     (*env)->SetIntArrayRegion(env, jdimObj, 0, ndims, jdims);
-    free(jdims);
+    FREE(jdims);
     if (process_java_exception(env)) {
         return NULL;
     }
@@ -401,7 +408,7 @@ static jobject convert_pyndarray_jndarray(JNIEnv *env, PyObject *pyobj)
         usigned = 1;
     } else if (paType == NPY_INT32) {
         desiredType = JINT_ARRAY_TYPE;
-    } else if (paType == NPY_INT32) {
+    } else if (paType == NPY_UINT32) {
         desiredType = JINT_ARRAY_TYPE;
         usigned = 1;
     } else if (paType == NPY_INT64) {
@@ -561,7 +568,7 @@ static PyObject* convert_jdndarray_pyndarray(PyObject* pyobj, PyObject* Py_UNUSE
         return NULL;
     }
 
-    dims = malloc(((int) ndims) * sizeof(npy_intp));
+    dims = MALLOCN_TP(npy_intp, ndims);
     for (i = 0; i < ndims; i++) {
         dims[i] = jdims[i];
     }
@@ -571,7 +578,7 @@ static PyObject* convert_jdndarray_pyndarray(PyObject* pyobj, PyObject* Py_UNUSE
     // get the primitive array and convert it
     data = (*env)->CallObjectMethod(env, obj, dndarrayGetData);
     if (process_java_exception(env) || !data) {
-        free(dims);
+        FREE(dims);
         return NULL;
     }
 
@@ -588,7 +595,7 @@ static PyObject* convert_jdndarray_pyndarray(PyObject* pyobj, PyObject* Py_UNUSE
 
     // primitive arrays can be large, encourage garbage collection
     (*env)->DeleteLocalRef(env, data);
-    free(dims);
+    FREE(dims);
     return result;
 }
 
@@ -714,7 +721,7 @@ static PyObject* convert_jndarray_pyndarray(PyObject* self, PyObject* Py_UNUSED(
         return NULL;
     }
 
-    dims = malloc(((int) ndims) * sizeof(npy_intp));
+    dims = MALLOCN_TP(npy_intp, ndims);
     for (i = 0; i < ndims; i++) {
         dims[i] = jdims[i];
     }
@@ -724,7 +731,7 @@ static PyObject* convert_jndarray_pyndarray(PyObject* self, PyObject* Py_UNUSED(
     // get the primitive array and convert it
     data = (*env)->CallObjectMethod(env, obj, ndarrayGetData);
     if (process_java_exception(env) || !data) {
-        free(dims);
+        FREE(dims);
         return NULL;
     }
 
@@ -735,7 +742,7 @@ static PyObject* convert_jndarray_pyndarray(PyObject* self, PyObject* Py_UNUSED(
 
     // primitive arrays can be large, encourage garbage collection
     (*env)->DeleteLocalRef(env, data);
-    free(dims);
+    FREE(dims);
     return result;
 }
 

@@ -26,6 +26,7 @@
 */
 
 #include "Jep.h"
+#include "jniutil.h"
 
 
 /*
@@ -60,21 +61,20 @@ CLASS_TABLE(DEFINE_CLASS_VAR)
 // get a const char* string from java string.
 // you *must* call release when you're finished with it.
 // returns local reference.
-const char* jstring2char(JNIEnv *env, jstring str)
+char* jstring2char(JNIEnv *env, jstring str)
 {
     if (str == NULL) {
         return NULL;
     }
-    return (*env)->GetStringUTFChars(env, str, 0);
+    return parseStr(env, str);
 }
 
 
 // release memory allocated by jstring2char
-void release_utf_char(JNIEnv *env, jstring str, const char *v)
+void release_utf_char(JNIEnv *env, jstring str, char *v)
 {
-    if (v != NULL && str != NULL) {
-        (*env)->ReleaseStringUTFChars(env, str, v);
-        (*env)->DeleteLocalRef(env, str);
+    if (v != NULL) {
+        FREE((void *)v);
     }
 }
 

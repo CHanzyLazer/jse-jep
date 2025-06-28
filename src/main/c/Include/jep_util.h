@@ -47,10 +47,10 @@
 // get a const char* string from java string.
 // you *must* call release when you're finished with it.
 // returns local reference.
-const char* jstring2char(JNIEnv*, jstring);
+char* jstring2char(JNIEnv*, jstring);
 
 // release memory allocated by jstring2char
-void release_utf_char(JNIEnv*, jstring, const char*);
+void release_utf_char(JNIEnv*, jstring, char*);
 
 // sets up J<BLAH>TYPE
 int cache_primitive_classes(JNIEnv*);
@@ -115,6 +115,7 @@ extern jclass JDOUBLE_ARRAY_TYPE;
     F(JCOMPARABLE_TYPE, "java/lang/Comparable") \
     F(JAUTOCLOSEABLE_TYPE, "java/lang/AutoCloseable") \
     F(JBIGINTEGER_TYPE, "java/math/BigInteger") \
+    F(JBIGDECIMAL_TYPE, "java/math/BigDecimal") \
     F(JBOOL_OBJ_TYPE, "java/lang/Boolean") \
     F(JBYTEBUFFER_TYPE, "java/nio/ByteBuffer") \
     F(JBYTE_OBJ_TYPE, "java/lang/Byte") \
